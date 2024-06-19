@@ -41,7 +41,7 @@ def convert_xlsx_to_csv():
             print(f"output is newer than input, skipping conversion ({csv_mtime} > {input_mtime})")
             needs_updating = False
 
-    if needs_updating or True:
+    if needs_updating:
         df = pd.read_excel(XLSX_PATH, header=3)
 
         # truncate misc header data
