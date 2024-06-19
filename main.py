@@ -20,8 +20,8 @@ TARIFF_URL = f"{BASE_URL}/v1/products/{PRODUCT_CODE}/electricity-tariffs/{TARIFF
 UNIT_RATE_URL = f"{TARIFF_URL}/standard-unit-rates/"
 
 # can't be bothered to do input handing
-START_TIME_UNIX = 1704067200.0  # 1704067200 -- 2024-01-01T00:00:00Z
-END_TIME_UNIX = 1717196400.0  # 1717196400 -- 2024-06-01T00:00:00Z
+START_TIME_UNIX = 1709078400.0
+END_TIME_UNIX = 1714176000.0
 
 
 def convert_xlsx_to_csv():
@@ -104,7 +104,7 @@ if __name__ == '__main__':
                 wattage = energy_consumed * 3600 / time_elapsed.total_seconds()
 
                 interval_begin = int(dt.timestamp())
-                interval_end = interval_begin + time_elapsed.total_seconds()
+                interval_end = interval_begin + int(time_elapsed.total_seconds())
                 if START_TIME_UNIX <= interval_end and interval_begin <= END_TIME_UNIX:
                     tree.addi(interval_begin, interval_end, wattage)
 
@@ -114,6 +114,30 @@ if __name__ == '__main__':
     #             [item.data for item in sorted(tree.items(), key=lambda x: x.begin)])
     # pyplot.show()
 
-    prices_sorted: list = sorted(fetch_agile_prices(period_from="2024-01-01T00:00:00Z"),
-                                 key=lambda entry: entry['valid_from'])
-    # print()
+    prices_sorted: list = sorted(
+        fetch_agile_prices(period_from=f"{datetime.datetime.fromtimestamp(START_TIME_UNIX).isoformat()}Z",
+                           period_to=f"{datetime.datetime.fromtimestamp(END_TIME_UNIX).isoformat()}Z"),
+        key=lambda entry: entry['valid_from']
+    )
+
+    # list of tuples: (start timestamp, usage in Wh, usage cost in GBP)
+    usage_by_price = []
+    for price in prices_sorted:
+        price_from = int(datetime.datetime.fromisoformat(price['valid_from']).timestamp())
+        price_to = int(datetime.datetime.fromisoformat(price['valid_to']).timestamp())
+        price_incl_vat = price['value_inc_vat']
+
+        usage_segments = tree[price_from:price_to]
+        for usage_segment in usage_segments:
+            # find overlap between usage segment and price valid range
+            overlap_begin = max(usage_segment.begin, price_from)
+            overlap_end = min(usage_segment.end, price_to)
+            segment_duration_seconds = overlap_end - overlap_begin
+
+            usage_kwh = usage_segment.data * segment_duration_seconds / 3_600_000
+            usage_cost = price_incl_vat * usage_kwh / 100.
+            usage_by_price.append((usage_segment.begin, usage_kwh, usage_cost))
+
+    total_usage_kwh = sum([kwh for _, kwh, _ in usage_by_price])
+    total_usage_cost = sum([cost for _, _, cost in usage_by_price])
+    print(f"{total_usage_kwh=:.3f}kWh, {total_usage_cost=:.3f}GBP")
