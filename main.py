@@ -21,9 +21,14 @@ UNIT_RATE_URL = f"{TARIFF_URL}/standard-unit-rates/"
 
 STANDING_CHARGE_PER_DAY = 0.3479
 
+# 567.896/30/24*1000, 567.896 was the total amount of energy used in 28th apr - 27th may
+MISSING_DATA_FILLER_WATTAGE = 788.744
+
 # can't be bothered to do input handing
-START_TIME_UNIX = 1709078400.0
-END_TIME_UNIX = 1714262400.0
+START_TIME_UNIX = 1714262400.0
+END_TIME_UNIX = 1716854400.0
+# START_TIME_UNIX = 1709078400.0
+# END_TIME_UNIX = 1714262400.0
 
 
 def convert_xlsx_to_csv():
@@ -105,7 +110,10 @@ if __name__ == '__main__':
                 energy_consumed = float(line[1])
                 wattage = energy_consumed * 3600 / time_elapsed.total_seconds()
 
-                interval_begin = int(dt.timestamp())
+                if time_elapsed > datetime.timedelta(minutes=15):  # we expect data every 10 minutes
+                    wattage = MISSING_DATA_FILLER_WATTAGE
+
+                interval_begin = int(last_dt.timestamp())
                 interval_end = interval_begin + int(time_elapsed.total_seconds())
                 if START_TIME_UNIX <= interval_end and interval_begin <= END_TIME_UNIX:
                     tree.addi(interval_begin, interval_end, wattage)
