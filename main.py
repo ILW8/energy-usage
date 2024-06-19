@@ -19,9 +19,11 @@ TARIFF_CODE = f"E-1R-{PRODUCT_CODE}-C"
 TARIFF_URL = f"{BASE_URL}/v1/products/{PRODUCT_CODE}/electricity-tariffs/{TARIFF_CODE}"
 UNIT_RATE_URL = f"{TARIFF_URL}/standard-unit-rates/"
 
+STANDING_CHARGE_PER_DAY = 0.3479
+
 # can't be bothered to do input handing
 START_TIME_UNIX = 1709078400.0
-END_TIME_UNIX = 1714176000.0
+END_TIME_UNIX = 1714262400.0
 
 
 def convert_xlsx_to_csv():
@@ -121,11 +123,13 @@ if __name__ == '__main__':
     )
 
     # list of tuples: (start timestamp, usage in Wh, usage cost in GBP)
-    usage_by_price = []
+    usage_by_price_incl_vat = []
+    usage_by_price_excl_vat = []
     for price in prices_sorted:
         price_from = int(datetime.datetime.fromisoformat(price['valid_from']).timestamp())
         price_to = int(datetime.datetime.fromisoformat(price['valid_to']).timestamp())
         price_incl_vat = price['value_inc_vat']
+        price_excl_vat = price['value_exc_vat']
 
         usage_segments = tree[price_from:price_to]
         for usage_segment in usage_segments:
@@ -136,8 +140,13 @@ if __name__ == '__main__':
 
             usage_kwh = usage_segment.data * segment_duration_seconds / 3_600_000
             usage_cost = price_incl_vat * usage_kwh / 100.
-            usage_by_price.append((usage_segment.begin, usage_kwh, usage_cost))
+            usage_cost_excl_vat = price_excl_vat * usage_kwh / 100.
+            usage_by_price_incl_vat.append((overlap_begin, usage_kwh, usage_cost))
+            usage_by_price_excl_vat.append((overlap_begin, usage_kwh, usage_cost_excl_vat))
 
-    total_usage_kwh = sum([kwh for _, kwh, _ in usage_by_price])
-    total_usage_cost = sum([cost for _, _, cost in usage_by_price])
-    print(f"{total_usage_kwh=:.3f}kWh, {total_usage_cost=:.3f}GBP")
+    total_usage_kwh = sum([kwh for _, kwh, _ in usage_by_price_incl_vat])
+    total_usage_cost_incl_vat = sum([cost for _, _, cost in usage_by_price_incl_vat])
+    total_usage_cost_excl_vat = sum([cost for _, _, cost in usage_by_price_excl_vat])
+    total_standing_charge = (END_TIME_UNIX - START_TIME_UNIX)/86_400 * STANDING_CHARGE_PER_DAY
+    print(f"{total_usage_kwh=:.3f}kWh, {total_usage_cost_incl_vat=:.3f}GBP, "
+          f"{total_usage_cost_excl_vat=:.3f}, {total_standing_charge=:.3f}GBP")
